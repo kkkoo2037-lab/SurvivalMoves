@@ -6,6 +6,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="ScriptHookVDotNet3">
       <HintPath>ScriptHookVDotNet3.dll</HintPath>
       <Private>false</Private>
