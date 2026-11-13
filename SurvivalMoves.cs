@@ -1,10 +1,8 @@
 using System;
-using System.Windows.Forms;
+using System.Runtime.InteropServices;
 using GTA;
 using GTA.Math;
 using GTA.Native;
-using Control = GTA.Control;
-
 
 // SurvivalMoves - ScriptHookVDotNet v3
 // D-pad ซ้าย (จอย) / F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
@@ -15,8 +13,8 @@ public class SurvivalMoves : Script
     // ---------- ตั้งค่าปุ่ม / ค่าต่างๆ ----------
     const Control BANDAGE_BTN = Control.PhoneLeft;   // D-pad ซ้าย
     const Control ARMOR_BTN   = Control.PhoneRight;  // D-pad ขวา
-    const Keys BANDAGE_KEY = Keys.F6;
-    const Keys ARMOR_KEY   = Keys.F7;
+    const int BANDAGE_VK = 0x75;  // F6
+    const int ARMOR_VK   = 0x76;  // F7
 
     const int   DOUBLE_TAP_MS   = 600;   // กดรัวภายในกี่ ms ถึงนับเป็นสไลด์
     const int   BANDAGE_TOTAL   = 60;    // เลือดที่ได้รวม
@@ -35,7 +33,10 @@ public class SurvivalMoves : Script
     const string SLIDE_ANIM   = "dive_start_run";
     // -------------------------------------------
 
-    bool kbBandage, kbArmor;
+    bool kbBandage, kbArmor, prevF6, prevF7;
+
+    [DllImport("user32.dll")]
+    static extern short GetAsyncKeyState(int vKey);
 
     bool bandaging; int healLeft; int nextHeal; int bandageEnd;
     bool armoring; int armorEnd;
@@ -45,11 +46,6 @@ public class SurvivalMoves : Script
     public SurvivalMoves()
     {
         Tick += OnTick;
-        KeyDown += (s, e) =>
-        {
-            if (e.KeyCode == BANDAGE_KEY) kbBandage = true;
-            if (e.KeyCode == ARMOR_KEY) kbArmor = true;
-        };
     }
 
     bool Pressed(Control c)
@@ -85,6 +81,11 @@ public class SurvivalMoves : Script
         // กันปุ่ม D-pad ทำงานอย่างอื่น (เช่น เปิดโทรศัพท์)
         Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)BANDAGE_BTN, true);
         Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)ARMOR_BTN, true);
+
+        bool f6 = (GetAsyncKeyState(BANDAGE_VK) & 0x8000) != 0;
+        bool f7 = (GetAsyncKeyState(ARMOR_VK) & 0x8000) != 0;
+        kbBandage = f6 && !prevF6; kbArmor = f7 && !prevF7;
+        prevF6 = f6; prevF7 = f7;
 
         bool bandagePressed = Pressed(BANDAGE_BTN) || kbBandage;
         bool armorPressed = Pressed(ARMOR_BTN) || kbArmor;
