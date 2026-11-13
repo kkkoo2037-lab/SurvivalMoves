@@ -5,14 +5,14 @@ using GTA.Math;
 using GTA.Native;
 
 // SurvivalMoves - ScriptHookVDotNet v3
-// D-pad ซ้าย (จอย) / F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
-// D-pad ขวา (จอย) / F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
+// L3 (จอย) / F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
+// RB (จอย) / F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
 // วิ่งอยู่แล้วกดปุ่มใส่เกราะรัว 2 ครั้ง = สไลด์พุ่งไปข้างหน้า
 public class SurvivalMoves : Script
 {
     // ---------- ตั้งค่าปุ่ม / ค่าต่างๆ ----------
-    const Control BANDAGE_BTN = Control.PhoneLeft;   // D-pad ซ้าย
-    const Control ARMOR_BTN   = Control.PhoneRight;  // D-pad ขวา
+    const Control BANDAGE_BTN = Control.Duck;    // L3 (ปุ่ม Stealth)
+    const Control ARMOR_BTN   = Control.Cover;   // RB (ปุ่ม Cover)
     const int BANDAGE_VK = 0x75;  // F6
     const int ARMOR_VK   = 0x76;  // F7
 
@@ -25,12 +25,19 @@ public class SurvivalMoves : Script
     const float SLIDE_SPEED     = 8f;    // ความเร็วเริ่มต้นตอนสไลด์
 
     // ท่าทาง (ถ้าไม่ถูกใจ เปลี่ยนชื่อได้)
-    const string BANDAGE_DICT = "amb@medic@standing@tendtodead@base";
-    const string BANDAGE_ANIM = "base";
+    // พันแผล: ท่าคุกเข่าทำแผล (ถ้าเกมไม่มี จะถอยไปใช้ท่าสำรอง)
+    const string BANDAGE_DICT  = "amb@medic@standing@kneel@idle_a";
+    const string BANDAGE_ANIM  = "idle_a";
+    const int    BANDAGE_FLAG  = 1;     // 1 = เล่นทั้งตัว วนซ้ำ
+    const string BANDAGE_DICT2 = "amb@medic@standing@tendtodead@base";
+    const string BANDAGE_ANIM2 = "base";
     const string ARMOR_DICT   = "clothingtie";
     const string ARMOR_ANIM   = "try_tie_positive_a";
-    const string SLIDE_DICT   = "move_jump";
-    const string SLIDE_ANIM   = "dive_start_run";
+    // สไลด์: ท่าไถลต่ำ (ถ้าเกมไม่มีแพ็กนี้ จะถอยไปใช้ท่าสำรอง)
+    const string SLIDE_DICT   = "parkour@anims";
+    const string SLIDE_ANIM   = "slide";
+    const string SLIDE_DICT2  = "move_jump";
+    const string SLIDE_ANIM2  = "dive_start_run";
     // -------------------------------------------
 
     bool kbBandage, kbArmor, prevF6, prevF7;
@@ -68,6 +75,14 @@ public class SurvivalMoves : Script
         Function.Call(Hash.TASK_PLAY_ANIM, p, dict, anim, 8f, -8f, ms, flag, 0f, false, false, false);
     }
 
+    void PlayAnimFb(Ped p, string d1, string a1, int f1, string d2, string a2, int f2, int ms)
+    {
+        if (LoadDict(d1))
+            Function.Call(Hash.TASK_PLAY_ANIM, p, d1, a1, 8f, -8f, ms, f1, 0f, false, false, false);
+        else if (LoadDict(d2))
+            Function.Call(Hash.TASK_PLAY_ANIM, p, d2, a2, 8f, -8f, ms, f2, 0f, false, false, false);
+    }
+
     void StopAnim(Ped p, string dict, string anim)
     {
         Function.Call(Hash.STOP_ANIM_TASK, p, dict, anim, 1f);
@@ -78,7 +93,7 @@ public class SurvivalMoves : Script
         Ped p = Game.Player.Character;
         if (p == null || !p.Exists() || p.IsDead || p.IsInVehicle()) { sliding = false; return; }
 
-        // กันปุ่ม D-pad ทำงานอย่างอื่น (เช่น เปิดโทรศัพท์)
+        // กันปุ่มทำงานอย่างอื่น (เช่น ย่อง / เข้าที่กำบัง)
         Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)BANDAGE_BTN, true);
         Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)ARMOR_BTN, true);
 
@@ -103,7 +118,7 @@ public class SurvivalMoves : Script
                 healLeft = BANDAGE_TOTAL;
                 nextHeal = now + BANDAGE_TICK_MS;
                 bandageEnd = now + (BANDAGE_TOTAL / BANDAGE_STEP) * BANDAGE_TICK_MS;
-                PlayAnim(p, BANDAGE_DICT, BANDAGE_ANIM, bandageEnd - now, 49);
+                PlayAnimFb(p, BANDAGE_DICT, BANDAGE_ANIM, BANDAGE_FLAG, BANDAGE_DICT2, BANDAGE_ANIM2, 49, bandageEnd - now);
             }
         }
         if (bandaging)
@@ -117,7 +132,7 @@ public class SurvivalMoves : Script
             if (healLeft <= 0 || now >= bandageEnd || p.Health >= p.MaxHealth)
             {
                 bandaging = false;
-                StopAnim(p, BANDAGE_DICT, BANDAGE_ANIM);
+                StopAnim(p, BANDAGE_DICT, BANDAGE_ANIM); StopAnim(p, BANDAGE_DICT2, BANDAGE_ANIM2);
             }
         }
 
@@ -166,7 +181,7 @@ public class SurvivalMoves : Script
             if (t >= SLIDE_MS)
             {
                 sliding = false;
-                StopAnim(p, SLIDE_DICT, SLIDE_ANIM);
+                StopAnim(p, SLIDE_DICT, SLIDE_ANIM); StopAnim(p, SLIDE_DICT2, SLIDE_ANIM2);
             }
             else
             {
@@ -192,10 +207,10 @@ public class SurvivalMoves : Script
         if (sliding) return;
         // ยกเลิกท่าอื่นที่ค้างอยู่
         if (armoring) { armoring = false; StopAnim(p, ARMOR_DICT, ARMOR_ANIM); }
-        if (bandaging) { bandaging = false; StopAnim(p, BANDAGE_DICT, BANDAGE_ANIM); }
+        if (bandaging) { bandaging = false; StopAnim(p, BANDAGE_DICT, BANDAGE_ANIM); StopAnim(p, BANDAGE_DICT2, BANDAGE_ANIM2); }
         sliding = true;
         slideStart = now;
         slideDir = p.ForwardVector;
-        PlayAnim(p, SLIDE_DICT, SLIDE_ANIM, SLIDE_MS, 0);
+        PlayAnimFb(p, SLIDE_DICT, SLIDE_ANIM, 0, SLIDE_DICT2, SLIDE_ANIM2, 0, SLIDE_MS);
     }
 }
