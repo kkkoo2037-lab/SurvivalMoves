@@ -21,7 +21,7 @@ public class SurvivalMoves : Script
     // สไลด์
     const bool  SLIDE_DOUBLE_TAP = false; // false = วิ่งแล้วกดครั้งเดียวสไลด์เลย / true = ต้องกดรัว 2 ครั้ง
     const int   DOUBLE_TAP_MS    = 900;   // (ใช้เมื่อเปิดกดรัว) กดรัวภายในกี่ ms
-    const int   SLIDE_STYLE      = 4;     // 0 = สุ่ม, 1 = ย่อตัวไถล, 2 = ล้มไถลไปกับพื้น, 3 = พุ่งตัว, 4 = คุกเข่าไถล
+    const int   SLIDE_STYLE      = 1;     // 0 = สุ่ม, 1 = ย่อตัวไถล, 2 = ล้มไถลไปกับพื้น, 3 = พุ่งตัว, 4 = คุกเข่าไถล
     const int   SLIDE_MS         = 900;   // ระยะเวลาสไลด์ (แบบ 1 และ 3)
     const int   RAGDOLL_MS       = 800;   // ระยะเวลาสไลด์แบบล้มไถล (แบบ 2)
     const float SLIDE_SPEED      = 8f;    // ความเร็วเริ่มต้น (เพิ่ม = พุ่งไกลขึ้น)
