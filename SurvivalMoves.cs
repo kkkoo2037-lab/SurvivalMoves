@@ -5,10 +5,9 @@ using GTA.Math;
 using GTA.Native;
 
 // SurvivalMoves - ScriptHookVDotNet v3
-// F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
-// F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
-// วิ่งอยู่แล้วกด F7 = สไลด์พุ่งไปข้างหน้า
-// (ใช้ปุ่มคีย์บอร์ดเป็นหลัก ถ้าอยากใช้ปุ่มจอยด้วยให้ตั้ง USE_GAMEPAD = true)
+// L3 (จอย/ปุ่มบนจอ) หรือ F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
+// RB (จอย/ปุ่มบนจอ) หรือ F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
+// วิ่งอยู่แล้วกดปุ่มใส่เกราะ = สไลด์พุ่งไปข้างหน้า
 public class SurvivalMoves : Script
 {
     // ================= ตั้งค่า =================
@@ -18,8 +17,9 @@ public class SurvivalMoves : Script
     const int BANDAGE_VK = 0x75;  // F6 = พันแผล
     const int ARMOR_VK   = 0x76;  // F7 = ใส่เกราะ / วิ่งอยู่แล้วกด = สไลด์
 
-    // ปุ่มจอย (ปิดไว้ ไม่แย่งหน้าที่ปุ่มย่อง/ที่กำบังของเกม)
-    const bool    USE_GAMEPAD = false;
+    // ปุ่มจอย / ปุ่มบนหน้าจอ (true = เปิดใช้, false = ปิด)
+    // เปิดไว้จะทำให้ปุ่มย่อง (L3) กับปุ่มเข้าที่กำบัง (RB) ใช้งานปกติไม่ได้
+    const bool    USE_GAMEPAD = true;
     const Control BANDAGE_BTN = Control.Duck;    // L3 (ปุ่ม Stealth)
     const Control ARMOR_BTN   = Control.Cover;   // RB (ปุ่ม Cover)
 
