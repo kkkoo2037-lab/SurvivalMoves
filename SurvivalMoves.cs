@@ -33,11 +33,7 @@ public class SurvivalMoves : Script
     const string BANDAGE_ANIM2 = "base";
     const string ARMOR_DICT   = "clothingtie";
     const string ARMOR_ANIM   = "try_tie_positive_a";
-    // สไลด์: ท่าไถลต่ำ (ถ้าเกมไม่มีแพ็กนี้ จะถอยไปใช้ท่าสำรอง)
-    const string SLIDE_DICT   = "parkour@anims";
-    const string SLIDE_ANIM   = "slide";
-    const string SLIDE_DICT2  = "move_jump";
-    const string SLIDE_ANIM2  = "dive_start_run";
+    // สไลด์: ใช้ท่าย่อตัวต่ำของเกม แล้วไถลไปข้างหน้า (ไม่ต้องใช้ท่าเสริม)
     // -------------------------------------------
 
     bool kbBandage, kbArmor, prevF6, prevF7;
@@ -81,6 +77,11 @@ public class SurvivalMoves : Script
             Function.Call(Hash.TASK_PLAY_ANIM, p, d1, a1, 8f, -8f, ms, f1, 0f, false, false, false);
         else if (LoadDict(d2))
             Function.Call(Hash.TASK_PLAY_ANIM, p, d2, a2, 8f, -8f, ms, f2, 0f, false, false, false);
+    }
+
+    void SetDuck(Ped p, bool on)
+    {
+        Function.Call((Hash)0x030983CA, p, on);   // SET_PED_DUCKING
     }
 
     void StopAnim(Ped p, string dict, string anim)
@@ -181,10 +182,11 @@ public class SurvivalMoves : Script
             if (t >= SLIDE_MS)
             {
                 sliding = false;
-                StopAnim(p, SLIDE_DICT, SLIDE_ANIM); StopAnim(p, SLIDE_DICT2, SLIDE_ANIM2);
+                SetDuck(p, false);
             }
             else
             {
+                SetDuck(p, true);   // ย่อตัวต่ำตลอดช่วงสไลด์
                 float speed = SLIDE_SPEED * (1f - (float)t / SLIDE_MS) + 1.5f;
                 Vector3 v = slideDir * speed;
                 v.Z = p.Velocity.Z;
@@ -211,6 +213,6 @@ public class SurvivalMoves : Script
         sliding = true;
         slideStart = now;
         slideDir = p.ForwardVector;
-        PlayAnimFb(p, SLIDE_DICT, SLIDE_ANIM, 0, SLIDE_DICT2, SLIDE_ANIM2, 0, SLIDE_MS);
+        SetDuck(p, true);
     }
 }
