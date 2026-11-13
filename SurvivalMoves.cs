@@ -4,6 +4,9 @@ using GTA;
 using GTA.Math;
 using GTA.Native;
 
+// แก้ชื่อซ้ำระหว่าง GTA.Control กับ System.Windows.Forms.Control
+using Control = GTA.Control;
+
 // SurvivalMoves - ScriptHookVDotNet v3
 // D-pad ซ้าย (จอย) / F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
 // D-pad ขวา (จอย) / F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
