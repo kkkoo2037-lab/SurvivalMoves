@@ -5,23 +5,28 @@ using GTA.Math;
 using GTA.Native;
 
 // SurvivalMoves - ScriptHookVDotNet v3
-// L3 (จอย) / F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
-// RB (จอย) / F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
-// วิ่งอยู่แล้วกดปุ่มใส่เกราะ (RB / F7) = สไลด์พุ่งไปข้างหน้า (สุ่มท่าได้หลายแบบ)
+// F6 (คีย์บอร์ด) = พันแผล  (เลือดค่อยๆ เพิ่ม)
+// F7 (คีย์บอร์ด) = ใส่เกราะ (เกราะ 100 + ตัวถึกขึ้น)
+// วิ่งอยู่แล้วกด F7 = สไลด์พุ่งไปข้างหน้า
+// (ใช้ปุ่มคีย์บอร์ดเป็นหลัก ถ้าอยากใช้ปุ่มจอยด้วยให้ตั้ง USE_GAMEPAD = true)
 public class SurvivalMoves : Script
 {
     // ================= ตั้งค่า =================
-    // ปุ่มจอย
+    // ปุ่มคีย์บอร์ด (ใส่เป็นรหัสปุ่ม Windows)
+    // ตัวอย่างรหัส: F5=0x74  F6=0x75  F7=0x76  F8=0x77  F9=0x78
+    //               H=0x48  G=0x47  X=0x58  Z=0x5A  R=0x52  B=0x42
+    const int BANDAGE_VK = 0x75;  // F6 = พันแผล
+    const int ARMOR_VK   = 0x76;  // F7 = ใส่เกราะ / วิ่งอยู่แล้วกด = สไลด์
+
+    // ปุ่มจอย (ปิดไว้ ไม่แย่งหน้าที่ปุ่มย่อง/ที่กำบังของเกม)
+    const bool    USE_GAMEPAD = false;
     const Control BANDAGE_BTN = Control.Duck;    // L3 (ปุ่ม Stealth)
     const Control ARMOR_BTN   = Control.Cover;   // RB (ปุ่ม Cover)
-    // ปุ่มคีย์บอร์ด (รหัสปุ่ม Windows)
-    const int BANDAGE_VK = 0x75;  // F6
-    const int ARMOR_VK   = 0x76;  // F7
 
     // สไลด์
     const bool  SLIDE_DOUBLE_TAP = false; // false = วิ่งแล้วกดครั้งเดียวสไลด์เลย / true = ต้องกดรัว 2 ครั้ง
     const int   DOUBLE_TAP_MS    = 900;   // (ใช้เมื่อเปิดกดรัว) กดรัวภายในกี่ ms
-    const int   SLIDE_STYLE      = 1;     // 0 = สุ่ม, 1 = ย่อตัวไถล, 2 = ล้มไถลไปกับพื้น, 3 = พุ่งตัว, 4 = คุกเข่าไถล
+    const int   SLIDE_STYLE      = 4;     // 0 = สุ่ม, 1 = ย่อตัวไถล, 2 = ล้มไถลไปกับพื้น, 3 = พุ่งตัว, 4 = คุกเข่าไถล
     const int   SLIDE_MS         = 900;   // ระยะเวลาสไลด์ (แบบ 1 และ 3)
     const int   RAGDOLL_MS       = 800;   // ระยะเวลาสไลด์แบบล้มไถล (แบบ 2)
     const float SLIDE_SPEED      = 8f;    // ความเร็วเริ่มต้น (เพิ่ม = พุ่งไกลขึ้น)
@@ -43,7 +48,11 @@ public class SurvivalMoves : Script
     const string BANDAGE_ANIM2 = "base";
     const string ARMOR_DICT    = "clothingtie";
     const string ARMOR_ANIM    = "try_tie_positive_a";
-    const string KNEEL_DICT    = "amb@medic@standing@kneel@idle_a";   // ท่าคุกเข่าตอนไถล
+    // ท่าสไลด์: ท่าฉลองคุกเข่าไถลของ Arena (เลือกสุ่ม a / b / c)
+    const string SLIDE_DICT    = "anim@arena@celeb@flat@solo@no_props@";
+    static readonly string[] SLIDE_ANIMS = { "slide_a_player_a", "slide_b_player_a", "slide_c_player_a" };
+    // ท่าสำรองถ้าเกมไม่มีท่าด้านบน: คุกเข่าแบบหมอ
+    const string KNEEL_DICT    = "amb@medic@standing@kneel@idle_a";
     const string KNEEL_ANIM    = "idle_a";
     const string DIVE_DICT     = "move_jump";
     const string DIVE_ANIM     = "dive_start_run";
@@ -59,6 +68,7 @@ public class SurvivalMoves : Script
     bool bandaging; int healLeft; int nextHeal; int bandageEnd;
     bool armoring; int armorEnd;
     bool pendingArmor; int lastTap;
+    string curDict = ""; string curAnim = "";
     bool sliding; int slideStart; int slideMs; int slideStyle; int slideReadyAt; Vector3 slideDir;
 
     public SurvivalMoves()
@@ -105,31 +115,70 @@ public class SurvivalMoves : Script
         Function.Call((Hash)0x030983CA, p, on);   // SET_PED_DUCKING
     }
 
+    // ใช้คำสั่งพื้นฐานของเกม (native) แทนฟังก์ชันของ ScriptHookVDotNet
+    // เพื่อให้ใช้ได้กับ ScriptHookVDotNet v3 ทุกเวอร์ชัน
+    int NowMs()                    { return Function.Call<int>(Hash.GET_GAME_TIMER); }
+    int GetHealth(Ped p)           { return Function.Call<int>(Hash.GET_ENTITY_HEALTH, p); }
+    int GetMaxHealth(Ped p)        { return Function.Call<int>(Hash.GET_ENTITY_MAX_HEALTH, p); }
+    void SetHealth(Ped p, int v)   { Function.Call(Hash.SET_ENTITY_HEALTH, p, v); }
+    int GetArmor(Ped p)            { return Function.Call<int>(Hash.GET_PED_ARMOUR, p); }
+    void SetArmor(Ped p, int v)    { Function.Call(Hash.SET_PED_ARMOUR, p, v); }
+    bool IsSprinting(Ped p)        { return Function.Call<bool>(Hash.IS_PED_SPRINTING, p); }
+    bool InVehicle(Ped p)          { return Function.Call<bool>(Hash.IS_PED_IN_ANY_VEHICLE, p, false); }
+    Vector3 GetForward(Ped p)      { return Function.Call<Vector3>(Hash.GET_ENTITY_FORWARD_VECTOR, p); }
+    float GetVelZ(Ped p)           { return Function.Call<Vector3>(Hash.GET_ENTITY_VELOCITY, p).Z; }
+    void SetVelocity(Ped p, float x, float y, float z)
+    {
+        Function.Call(Hash.SET_ENTITY_VELOCITY, p, x, y, z);
+    }
+
+    void Subtitle(string text)
+    {
+        Function.Call(Hash.BEGIN_TEXT_COMMAND_PRINT, "STRING");
+        Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text);
+        Function.Call(Hash.END_TEXT_COMMAND_PRINT, 2000, true);
+    }
+
     // ---------- ลูปหลัก ----------
     void OnTick(object sender, EventArgs e)
     {
-        Ped p = Game.Player.Character;
-        if (p == null || !p.Exists() || p.IsDead || p.IsInVehicle()) { sliding = false; return; }
+        try
+        {
+            Tick2();
+        }
+        catch (Exception)
+        {
+            // กันสคริปต์ล้มทั้งตัวถ้าเกิดข้อผิดพลาดชั่วคราว
+        }
+    }
 
-        // กันปุ่มทำงานอย่างอื่น (เช่น ย่อง / เข้าที่กำบัง)
-        Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)BANDAGE_BTN, true);
-        Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)ARMOR_BTN, true);
+    void Tick2()
+    {
+        Ped p = Game.Player.Character;
+        if (p == null || !p.Exists() || p.IsDead || InVehicle(p)) { sliding = false; return; }
+
+        // กันปุ่มจอยทำงานอย่างอื่น (เช่น ย่อง / เข้าที่กำบัง) เฉพาะตอนเปิดใช้ปุ่มจอย
+        if (USE_GAMEPAD)
+        {
+            Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)BANDAGE_BTN, true);
+            Function.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)ARMOR_BTN, true);
+        }
 
         bool f6 = (GetAsyncKeyState(BANDAGE_VK) & 0x8000) != 0;
         bool f7 = (GetAsyncKeyState(ARMOR_VK) & 0x8000) != 0;
         kbBandage = f6 && !prevF6; kbArmor = f7 && !prevF7;
         prevF6 = f6; prevF7 = f7;
 
-        bool bandagePressed = Pressed(BANDAGE_BTN) || kbBandage;
-        bool armorPressed = Pressed(ARMOR_BTN) || kbArmor;
+        bool bandagePressed = (USE_GAMEPAD && Pressed(BANDAGE_BTN)) || kbBandage;
+        bool armorPressed = (USE_GAMEPAD && Pressed(ARMOR_BTN)) || kbArmor;
         kbBandage = false; kbArmor = false;
-        int now = Game.GameTime;
+        int now = NowMs();
 
         // ---------- พันแผล ----------
         if (bandagePressed && !bandaging && !sliding)
         {
-            if (p.Health >= p.MaxHealth)
-                GTA.UI.Screen.ShowSubtitle("เลือดเต็มอยู่แล้ว");
+            if (GetHealth(p) >= GetMaxHealth(p))
+                Subtitle("เลือดเต็มอยู่แล้ว");
             else
             {
                 bandaging = true;
@@ -143,11 +192,11 @@ public class SurvivalMoves : Script
         {
             if (now >= nextHeal && healLeft > 0)
             {
-                p.Health = Math.Min(p.MaxHealth, p.Health + BANDAGE_STEP);
+                SetHealth(p, Math.Min(GetMaxHealth(p), GetHealth(p) + BANDAGE_STEP));
                 healLeft -= BANDAGE_STEP;
                 nextHeal = now + BANDAGE_TICK_MS;
             }
-            if (healLeft <= 0 || now >= bandageEnd || p.Health >= p.MaxHealth)
+            if (healLeft <= 0 || now >= bandageEnd || GetHealth(p) >= GetMaxHealth(p))
             {
                 bandaging = false;
                 StopAnim(p, BANDAGE_DICT, BANDAGE_ANIM);
@@ -158,7 +207,7 @@ public class SurvivalMoves : Script
         // ---------- ใส่เกราะ / สไลด์ ----------
         if (armorPressed)
         {
-            if (p.IsSprinting)
+            if (IsSprinting(p))
             {
                 if (!SLIDE_DOUBLE_TAP)
                 {
@@ -187,13 +236,13 @@ public class SurvivalMoves : Script
         if (armoring && now >= armorEnd)
         {
             armoring = false;
-            p.Armor = 100;
+            SetArmor(p, 100);
             StopAnim(p, ARMOR_DICT, ARMOR_ANIM);
-            GTA.UI.Screen.ShowSubtitle("ใส่เกราะแล้ว");
+            Subtitle("ใส่เกราะแล้ว");
         }
 
         // ตัวถึกขึ้นเมื่อมีเกราะ: ไม่โดนฮิตคริติคอล (เฮดช็อตตายทันที) และล้มยากขึ้น
-        bool armored = p.Armor > 0;
+        bool armored = GetArmor(p) > 0;
         Function.Call(Hash.SET_PED_SUFFERS_CRITICAL_HITS, p, !armored);
         Function.Call(Hash.SET_PED_CAN_RAGDOLL_FROM_PLAYER_IMPACT, p, !armored);
 
@@ -211,9 +260,7 @@ public class SurvivalMoves : Script
 
                 float speed = SLIDE_SPEED * (1f - (float)t / slideMs) + 1.5f;
                 if (slideStyle == 2) speed *= 1.2f;      // ล้มไถลต้องแรงกว่านิดหน่อยเพราะมีแรงเสียดทาน
-                Vector3 v = slideDir * speed;
-                v.Z = p.Velocity.Z;
-                p.Velocity = v;
+                SetVelocity(p, slideDir.X * speed, slideDir.Y * speed, GetVelZ(p));
             }
         }
     }
@@ -222,7 +269,7 @@ public class SurvivalMoves : Script
     void StartArmor(Ped p, int now)
     {
         if (armoring || sliding) return;
-        if (p.Armor >= 100) { GTA.UI.Screen.ShowSubtitle("เกราะเต็มอยู่แล้ว"); return; }
+        if (GetArmor(p) >= 100) { Subtitle("เกราะเต็มอยู่แล้ว"); return; }
         armoring = true;
         armorEnd = now + ARMOR_ANIM_MS;
         PlayAnim(p, ARMOR_DICT, ARMOR_ANIM, ARMOR_ANIM_MS, 49);
@@ -250,7 +297,7 @@ public class SurvivalMoves : Script
         slideMs = (slideStyle == 2) ? RAGDOLL_MS : SLIDE_MS;
         sliding = true;
         slideStart = now;
-        slideDir = p.ForwardVector;
+        slideDir = GetForward(p);
 
         if (slideStyle == 1)
         {
@@ -258,9 +305,19 @@ public class SurvivalMoves : Script
         }
         else if (slideStyle == 4)
         {
-            // คุกเข่าแล้วไถลไปข้างหน้า (ถ้าเกมไม่มีท่านี้ ถอยไปใช้ท่าย่อตัวแทน)
-            if (LoadDict(KNEEL_DICT))
-                Function.Call(Hash.TASK_PLAY_ANIM, p, KNEEL_DICT, KNEEL_ANIM, 8f, -8f, SLIDE_MS, 1, 0f, false, false, false);
+            // คุกเข่าไถลไปข้างหน้า: ลองท่า Arena ก่อน ถ้าไม่มีใช้ท่าคุกเข่าแบบหมอ ถ้าไม่มีอีกใช้ท่าย่อตัว
+            if (LoadDict(SLIDE_DICT))
+            {
+                curDict = SLIDE_DICT;
+                curAnim = SLIDE_ANIMS[rng.Next(SLIDE_ANIMS.Length)];
+                Function.Call(Hash.TASK_PLAY_ANIM, p, curDict, curAnim, 8f, -8f, SLIDE_MS, 0, 0f, false, false, false);
+            }
+            else if (LoadDict(KNEEL_DICT))
+            {
+                curDict = KNEEL_DICT;
+                curAnim = KNEEL_ANIM;
+                Function.Call(Hash.TASK_PLAY_ANIM, p, curDict, curAnim, 8f, -8f, SLIDE_MS, 1, 0f, false, false, false);
+            }
             else
             {
                 slideStyle = 1;
@@ -285,6 +342,6 @@ public class SurvivalMoves : Script
         slideReadyAt = now + SLIDE_COOLDOWN;
         if (slideStyle == 1) SetDuck(p, false);
         if (slideStyle == 3) StopAnim(p, DIVE_DICT, DIVE_ANIM);
-        if (slideStyle == 4) StopAnim(p, KNEEL_DICT, KNEEL_ANIM);
+        if (slideStyle == 4) StopAnim(p, curDict, curAnim);
     }
 }
